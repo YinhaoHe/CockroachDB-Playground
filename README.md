@@ -100,3 +100,127 @@ What if there is one node down when we only have THREE nodes:
 - Then it will be back to 3 replicas in 6 nodes.
 - Conclusion here is bigger replica factor and more nodes - SAFER (5 replicas and nodes can handle 2 nodes dead at the same time)
 
+## Start an Insecure Single-Node Cluster
+
+```bash
+cockroach start-single-node --insecure --listen-addr=localhost:26257 --http-
+addr=localhost:8080
+```
+
+To load some [MovR](https://www.cockroachlabs.com/docs/stable/movr.html) for testing
+
+```bash
+cockroach workload init movr
+```
+
+Connect to built-in SQL shell
+
+```bash
+cockroach sql --insecure
+```
+
+Testing SQL shell
+
+```sql
+SHOW databases;
+SHOW TABLES FROM movr;
+SELECT * FROM movr.users LIMIT 10;
+```
+
+Creating and Modifying a Table
+
+```sql
+CREATE DATABASE crdb_uni;
+```
+
+Set to current DB
+
+```sql
+SET database = crdb_uni;
+```
+
+Create new table students - single primary key
+
+```sql
+CREATE TABLE students (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), name STRING);
+```
+
+To Show the created table
+
+```sql
+SHOW CREATE students;
+```
+
+Create new table courses - composited primary key
+
+```sql
+CREATE TABLE courses (sys_id UUID DEFAULT gen_random_uuid(), course_id INT, name STRING, PRIMARY KEY (sys_id, course_id));
+
+SHOW CREATE TABLE courses;
+```
+
+Alter a table
+
+```sql
+ALTER TABLE courses ADD COLUMN schedule STRING;
+
+SHOW CREATE TABLE courses;
+```
+
+## Secondary Indexes
+
+- Create a index that can tell us where the primary key is
+- For example: primary key is user's `id`, but I want to filter a table with user's `first` and `last` name
+- CockroachDB let you create a index by `CREATE INDEX my_index` 
+
+```shell
+cat index_demo.sql
+```
+
+```sql
+DROP TABLE IF EXISTS users;
+CREATE TABLE users (id INT PRIMARY KEY,
+                    last_name STRING NOT NULL,
+                    first_name STRING NOT NULL,
+                    country STRING,
+                    city STRING);
+INSERT INTO users (id, last_name, first_name, country, city)
+     VALUES (1, 'Cross', 'William', 'USA', 'Jersey City'),
+            (2, 'Seldess', 'Jesse', 'USA', 'New York'),
+            (3, 'Hirata', 'Lauren', 'USA', 'New York'),
+            (4, 'Cross', 'Zachary', 'USA', 'Seattle'),
+            (5, 'Shakespeare', 'William', 'UK', 'Stratford-upon-Avon');
+```
+
+```shell
+cockroach sql --insecure < index_demo.sql 
+```
+
+```sql
+ SELECT * FROM users;
+```
+
+Find out what the indexes is
+
+```sql
+SHOW INDEXES FROM users;
+```
+
+How the database query data
+
+```sql
+SELECT * FROM users WHERE id = 1;
+EXPLAIN SELECT * FROM users WHERE id = 1;
+EXPLAIN SELECT * FROM users WHERE last_name = 'Cross' AND first_name = 'William';
+```
+
+Create index
+
+```sql
+CREATE INDEX my_index ON users (last_name, first_name);
+SHOW INDEXES FROM users;
+EXPLAIN SELECT * FROM users WHERE last_name = 'Cross' AND first_name = 'William';
+```
+
+![Visitor Count](https://profile-counter.glitch.me/{YinhaoHe}/count.svg)
+
