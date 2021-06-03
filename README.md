@@ -172,6 +172,7 @@ SHOW CREATE TABLE courses;
 - Create a index that can tell us where the primary key is
 - For example: primary key is user's `id`, but I want to filter a table with user's `first` and `last` name
 - CockroachDB let you create a index by `CREATE INDEX my_index` 
+- Once we have the index, DB doesn't have to scan and filter the database. - MUCH FASTER
 
 ```shell
 cat index_demo.sql
@@ -221,3 +222,126 @@ CREATE INDEX my_index ON users (last_name, first_name);
 SHOW INDEXES FROM users;
 EXPLAIN SELECT * FROM users WHERE last_name = 'Cross' AND first_name = 'William';
 ```
+
+## Transaction Syntax
+
+- Use `BEGIN` to start a multi-statement transaction
+- DB will block any transaction that try to do alter this transaction
+- After we hit `COMMIT` on the first transaction, the second one can do transaction after the first one
+- If the second transaction show an error, we will need to `ROLLBACK` on the second transaction.
+- Keep data safe and guarantee interigrity
+
+First Transaction:
+
+```sql
+SHOW TABLES FROM bank;
+SELECT * FROM bank.customers;
+SELECT * FROM bank.accounts;
+SELECT balance >= 50 FROM bank.accounts WHERE type = 'checking' AND customer_id = 2;
+UPDATE bank.accounts SET balance = balance - 50 WHERE type = 'checking' AND customer_id = 2;
+SELECT * FROM bank.accounts WHERE type = 'checking' AND customer_id = 2;
+BEGIN;
+SELECT balance >= 200 FROM bank.accounts WHERE type = 'checking' AND customer_id = 2;
+UPDATE bank.accounts SET balance = balance - 200 WHERE type = 'checking' AND customer_id = 2;
+COMMIT;
+```
+
+Second Transaction:
+
+```sql
+BEGIN;
+SELECT balance >= 200 FROM bank.accounts WHERE type = 'checking' AND customer_id = 2;
+UPDATE bank.accounts SET balance = balance - 200 WHERE type = 'checking' AND customer_id = 2;
+ROLLBACK;
+SELECT * FROM bank.accounts WHERE type = 'checking' AND customer_id=2;
+```
+
+## Stop and Delete CockroachDB
+
+```shell
+pkill -9 cockroach
+rm -r cocoroach-data
+```
+
+## Spin up and Scale Out a Local Cluster
+
+- we can keep adding new nodes to the existing cluster
+
+```sql
+cockroach start --insecure --listen-addr=localhost:26257 --join=localhost:26257,localhost:26258,localhost:26259 \
+  --http-addr=localhost:8080 --store=cockroach-data-1 --background
+cockroach start --insecure --listen-addr=localhost:26257 --join=localhost:26257,localhost:26258,localhost:26259 \
+  --http-addr=localhost:8081 --store=cockroach-data-2 --background  # this will error out
+cockroach start --insecure --listen-addr=localhost:26258 --join=localhost:26257,localhost:26258,localhost:26259 \
+  --http-addr=localhost:8081 --store=cockroach-data-2 --background
+cockroach start --insecure --listen-addr=localhost:26259 --join=localhost:26257,localhost:26258,localhost:26259 \
+--http-addr=localhost:8082 --store=cockroach-data-3 --background
+
+cockroach init --host localhost:26258 --insecure
+
+open http://localhost:8080
+
+cockroach start --insecure --listen-addr=localhost:26260 \
+  --join=localhost:26257,localhost:26258,localhost:26259,localhost:26260,localhost:26261 \
+  --http-addr=localhost:8083 --store=cockroach-data-4 --background
+cockroach start --insecure --listen-addr=localhost:26261 \
+  --join=localhost:26257,localhost:26258,localhost:26259,localhost:26260,localhost:26261 \
+  --http-addr=localhost:8084 --store=cockroach-data-5 --background
+```
+
+## Admin UI
+
+![](./images/AdminUI.png)
+
+## Localities flags
+
+- DB can be distributed across different countries or regions. 
+- **Most importantly, the nodes will be distributed evenly across the geo-locations.**
+- `--locality=country=us,region=us-east` 
+- First `Country` then `region`
+
+```shell
+cockroach start --insecure --locality=country=us,region=us-east --store=node1 --listen-addr=localhost:26257 --http-addr=localhost:8080 --join=localhost:26257,localhost:26258,localhost:26259 --background
+```
+
+## Geo-partitioning
+
+- If all nodes are distributed evenly across the country, there would be a hugh latency in writes.
+- So we can geo-partition the data by `ROW`s - THAT"S SO COOL.
+- Each row can be marked and get pertitioned into different location's node - making the replicas near each other. So it would reduce latency. 
+
+```sql
+SHOW RANGES FROM TABLE movr.vehicles;
+
+ALTER TABLE movr.vehicles
+PARTITION BY LIST (city) (
+    PARTITION new_york VALUES IN ('new york'),
+    PARTITION boston VALUES IN ('boston'),
+    PARTITION washington_dc VALUES IN ('washington dc'),
+    PARTITION seattle VALUES IN ('seattle'),
+    PARTITION san_francisco VALUES IN ('san francisco'),
+    PARTITION los_angeles VALUES IN ('los angeles')
+);
+
+ALTER PARTITION new_york OF TABLE movr.vehicles
+CONFIGURE ZONE USING constraints='[+region=us-east]';
+
+ALTER PARTITION boston OF TABLE movr.vehicles
+CONFIGURE ZONE USING constraints='[+region=us-east]';
+
+ALTER PARTITION washington_dc OF TABLE movr.vehicles
+CONFIGURE ZONE USING constraints='[+region=us-central]';
+
+ALTER PARTITION seattle OF TABLE movr.vehicles
+CONFIGURE ZONE USING constraints='[+region=us-west]';
+
+ALTER PARTITION san_francisco OF TABLE movr.vehicles
+CONFIGURE ZONE USING constraints='[+region=us-west]';
+
+ALTER PARTITION los_angeles OF TABLE movr.vehicles
+CONFIGURE ZONE USING constraints='[+region=us-west]';
+
+SELECT start_key, end_key, lease_holder_locality, replicas, replica_localities FROM [SHOW RANGES FROM TABLE movr.vehicles]
+WHERE "start_key" NOT LIKE '%Prefix%' AND "end_key" NOT LIKE '%Prefix';
+```
+
