@@ -221,6 +221,3 @@ CREATE INDEX my_index ON users (last_name, first_name);
 SHOW INDEXES FROM users;
 EXPLAIN SELECT * FROM users WHERE last_name = 'Cross' AND first_name = 'William';
 ```
-
-![Visitor Count](https://profile-counter.glitch.me/{YinhaoHe}/count.svg)
-
