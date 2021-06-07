@@ -12,12 +12,12 @@
 
 ### Distributed SQL
 
-| SQL         | NO SQL      |
-| ----------- | ----------- |
-| Scale       | Scale       |
-| Consistency | Consistency |
-| Resiliency  | Resiliency  |
-| SQL         | SQL         |
+| SQL              | NO SQL          |
+| ---------------- | --------------- |
+| Bad Scale        | Good Scale      |
+| Good Consistency | Bad Consistency |
+| Bad Resiliency   | Good Resiliency |
+| Good SQL         | Bad SQL         |
 
 ### ACID Transactions
 
