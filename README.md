@@ -7,7 +7,7 @@
 
 ## What is CockroachDB?
 
-- Distributed SQL Database 
+- Distributed SQL Database
 - OLTP (Online Transactional Processing) workloads: Means a client only touches a few line of record, but a lot of clients are doing this in parallel.
 
 ### Distributed SQL
